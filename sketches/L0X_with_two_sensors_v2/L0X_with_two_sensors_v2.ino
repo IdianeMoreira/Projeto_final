@@ -5,15 +5,13 @@
 #include <Adafruit_VL53L0X.h>
 #include <time.h>
 
-// =======================
-// WiFi
-// =======================
+
+// Liação WiFi
 const char* SSID = "ZON-0770";
 const char* PASS = "ddb8d7a757cb";
 
-// =======================
+
 // MQTT
-// =======================
 const char* MQTT_SERVER = "broker.hivemq.com";
 const int MQTT_PORT = 1883;
 const char* MQTT_TOPIC = "sensor/m5stick/dual_tof";
@@ -21,16 +19,12 @@ const char* MQTT_TOPIC = "sensor/m5stick/dual_tof";
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-// =======================
 // Sensores
-// =======================
 Adafruit_VL53L0X lox1;
 Adafruit_VL53L0X lox2;
 
-// =======================
-// Config deteção
-// =======================
-const int THRESHOLD = 100;
+// Config para deteção
+const int THRESHOLD = 100; // mm
 
 bool prevA = false;
 bool prevB = false;
@@ -48,18 +42,14 @@ const int TIMEOUT = 1000;
 
 int peopleCount = 0;
 
-// =======================
 // PaHUB (I2C multiplexer)
-// =======================
 void pabhubSelectChannel(uint8_t channel) {
   Wire.beginTransmission(0x70);
-  Wire.write(1 << channel);
+  Wire.write(1 << channel); // Selecionar o canal ativo através de uma bitmask
   Wire.endTransmission();
 }
 
-// =======================
 // WiFi
-// =======================
 void wifiConnect() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(SSID, PASS);
@@ -72,9 +62,7 @@ void wifiConnect() {
   Serial.println("\nWiFi ligado!");
 }
 
-// =======================
 // MQTT
-// =======================
 void mqttConnect() {
   while (!client.connected()) {
     Serial.print("A ligar ao MQTT...");
@@ -88,9 +76,7 @@ void mqttConnect() {
   }
 }
 
-// =======================
 // Setup
-// =======================
 void setup() {
   M5.begin();
   Serial.begin(115200);
@@ -116,8 +102,8 @@ void setup() {
 
   client.setServer(MQTT_SERVER, MQTT_PORT);
 
-  // NTP
-  configTime(0, 0, "pool.ntp.org");
+  // Obter hora exata pela internet (Network Time Protocol)
+  configTime(0, 3600, "pool.ntp.org");
 
   struct tm timeinfo;
   while (!getLocalTime(&timeinfo)) {
@@ -125,9 +111,7 @@ void setup() {
   }
 }
 
-// =======================
 // Loop
-// =======================
 void loop() {
 
   if (!client.connected()) {
@@ -146,19 +130,23 @@ void loop() {
   pabhubSelectChannel(5);
   lox2.rangingTest(&m2, false);
 
+  // Obter as distâncias de ambos os sensores
   int dist1 = (m1.RangeStatus != 4) ? m1.RangeMilliMeter : -1;
   int dist2 = (m2.RangeStatus != 4) ? m2.RangeMilliMeter : -1;
 
+  // Algoritmo para a deteção de presença
   bool currA = (dist1 > 0 && dist1 < THRESHOLD);
   bool currB = (dist2 > 0 && dist2 < THRESHOLD);
 
+  // Detetar o momento em que algo aparece
   bool trigA = (!prevA && currA);
   bool trigB = (!prevB && currB);
 
+  // Atualizar estado para a próxima iteração
   prevA = currA;
   prevB = currB;
 
-  unsigned long now = millis();
+  unsigned long now = millis(); // Tempo do sistema
 
   // Timestamp
   struct tm timeinfo;
@@ -190,8 +178,8 @@ void loop() {
           "\"timestamp\":\"" + String(timestamp) + "\"," +
           "\"event\":\"entry\"," +
           "\"count\":" + String(peopleCount) + "," +
-          "\"sensor_A\":" + String(dist1) + "," +
-          "\"sensor_B\":" + String(dist2) +
+          "\"sensor_A_mm\":" + String(dist1) + "," +
+          "\"sensor_B_mm\":" + String(dist2) +
         "}";
 
         Serial.println(payload);
@@ -215,8 +203,8 @@ void loop() {
           "\"timestamp\":\"" + String(timestamp) + "\"," +
           "\"event\":\"exit\"," +
           "\"count\":" + String(peopleCount) + "," +
-          "\"sensor_A\":" + String(dist1) + "mm," +
-          "\"sensor_B\":" + String(dist2) + "mm" +
+          "\"sensor_A_mm\":" + String(dist1) + "," +
+          "\"sensor_B_mm\":" + String(dist2) +
         "}";
 
         Serial.println(payload);
