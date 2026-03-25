@@ -6,17 +6,14 @@ let eventCount = 0;
 const filePath = "events.csv";
 
 // Escreve o cabeçalho do ficheiro CSV
-fs.writeFileSync(filePath, "device,timestamp,event,count,dist_A,dist_B\n");
+fs.writeFileSync(filePath, "timestamp;event;people_inside;total_entries;total_exits\n");
 
 export function logEvent(data) {
 
     if (eventCount >= MAX_EVENTS) return;
 
-    const distA = data.sensor_A ?? -1;
-    const distB = data.sensor_B ?? -1;
-
     const line =
-        `${data.device},${data.timestamp},${data.event},${data.count},${distA},${distB}\n`;
+        `${data.timestamp};${data.event};${data.people_inside};${data.total_entries};${data.total_exits}\n`;
 
     fs.appendFileSync(filePath, line);
 

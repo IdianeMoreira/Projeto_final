@@ -21,7 +21,7 @@ PubSubClient client(espClient);
 Adafruit_VL53L0X lox1;
 Adafruit_VL53L0X lox2;
 
-// Config para deteção no topo da porta
+// Config para deteção
 const int MIN_VALID_MM = 50;       // ignora leituras demasiado próximas / ruído
 const int PERSON_MAX_MM = 1200;    // distância máxima para considerar "pessoa"
 const int TIMEOUT = 1000;          // ms entre ativação de A e B
@@ -29,6 +29,7 @@ const int TIMEOUT = 1000;          // ms entre ativação de A e B
 bool prevA = false;
 bool prevB = false;
 
+// Máquina de estados para detetar direção
 enum State {
   IDLE,
   A_TRIGGERED,
@@ -37,17 +38,19 @@ enum State {
 
 State state = IDLE;
 
-unsigned long lastTriggerTime = 0;
-int peopleCount = 0;
+unsigned long lastTriggerTime = 0; // 
+int peopleCount = 0; // contador de pessoas atualmente presentes
+int totalEntries = 0; // contador total de entradas
+int totalExits = 0; // contador total de saídas
 
-// PaHUB (I2C multiplexer)
+// Função para selecionar canal do PABHub
 void pabhubSelectChannel(uint8_t channel) {
   Wire.beginTransmission(0x70);
   Wire.write(1 << channel);
   Wire.endTransmission();
 }
 
-// WiFi
+// Conectar ao WiFi
 void wifiConnect() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(SSID, PASS);
@@ -60,7 +63,7 @@ void wifiConnect() {
   Serial.println("\nWiFi ligado!");
 }
 
-// MQTT
+// Conectar ao MQTT
 void mqttConnect() {
   while (!client.connected()) {
     Serial.print("A ligar ao MQTT...");
@@ -74,16 +77,45 @@ void mqttConnect() {
   }
 }
 
-// Verifica se há pessoa debaixo do sensor
+// Função para determinar se a distância indica presença de pessoa
 bool personDetected(int dist) {
   return (dist >= MIN_VALID_MM && dist <= PERSON_MAX_MM);
 }
 
+// Função para criar timestamp
+void createTimestamp(char* buffer, size_t size) {
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo)) {
+    strftime(buffer, size, "%Y-%m-%d %H:%M:%S", &timeinfo);
+  } else {
+    strcpy(buffer, "no_time");
+  }
+}
+
+// Função para enviar evento MQTT
+void sendEvent(const char* eventType) {
+  char timestamp[30];
+  createTimestamp(timestamp, sizeof(timestamp));
+
+  String payload = String("{") +
+    "\"timestamp\":\"" + String(timestamp) + "\"," +
+    "\"event\":\"" + eventType + "\"," +
+    "\"people_inside\":" + String(peopleCount) + "," +
+    "\"total_entries\":" + String(totalEntries) + "," +
+    "\"total_exits\":" + String(totalExits) +
+  "}";
+
+  Serial.println(payload);
+  if (client.connected()) {
+    client.publish(MQTT_TOPIC, payload.c_str());
+  }
+}
+
 // Setup
 void setup() {
-  M5.begin();
-  Serial.begin(115200);
-  Wire.begin();
+  M5.begin(); // Inicializa o M5StickC Plus 2
+  Serial.begin(115200); 
+  Wire.begin(); // Inicializa I2C
 
   Serial.println("Inicializar sensores...");
 
@@ -102,7 +134,7 @@ void setup() {
   }
 
   wifiConnect();
-  client.setServer(MQTT_SERVER, MQTT_PORT);
+  client.setServer(MQTT_SERVER, MQTT_PORT); // Configura MQTT
 
   // NTP
   configTime(0, 3600, "pool.ntp.org");
@@ -136,28 +168,21 @@ void loop() {
   int dist1 = (m1.RangeStatus != 4) ? m1.RangeMilliMeter : -1;
   int dist2 = (m2.RangeStatus != 4) ? m2.RangeMilliMeter : -1;
 
-  // Presença atual
+  // Verificar se a pessoa foi detectada por cada sensor
   bool currA = personDetected(dist1);
   bool currB = personDetected(dist2);
 
-  // Flanco de subida: passou de "sem pessoa" para "com pessoa"
+  // Ativar triggers apenas na transição de "não detectado" para "detectado"
   bool trigA = (!prevA && currA);
   bool trigB = (!prevB && currB);
 
-  // Atualizar estados anteriores
+  // Atualizar estados anteriores para a próxima iteração
   prevA = currA;
   prevB = currB;
 
   unsigned long now = millis();
 
-  // Timestamp
-  struct tm timeinfo;
-  getLocalTime(&timeinfo);
-
-  char timestamp[30];
-  strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &timeinfo);
-
-  // Debug serial
+  // Debug no Serial
   Serial.print("A: ");
   Serial.print(dist1);
   Serial.print(" mm | B: ");
@@ -167,7 +192,9 @@ void loop() {
   Serial.print(" | trigB=");
   Serial.println(trigB);
 
+  // Máquina de estados para detetar direção
   switch (state) {
+    // Estado inicial: espera por trigger em A ou B
     case IDLE:
       if (trigA) {
         state = A_TRIGGERED;
@@ -179,54 +206,41 @@ void loop() {
       }
       break;
 
+    // Se A foi ativado, espera por B para confirmar entrada
     case A_TRIGGERED:
       if (trigB) {
         peopleCount++;
+        totalEntries++;
 
-        String payload = String("{") +
-          "\"device\":\"m5stickcplus2\"," +
-          "\"timestamp\":\"" + String(timestamp) + "\"," +
-          "\"event\":\"entry\"," +
-          "\"count\":" + String(peopleCount) + "," +
-          "\"sensor_A_mm\":" + String(dist1) + "," +
-          "\"sensor_B_mm\":" + String(dist2) +
-        "}";
+        sendEvent("entry");
 
-        Serial.println(payload);
-        client.publish(MQTT_TOPIC, payload.c_str());
-
-        state = IDLE;
+        state = IDLE; // reset para próxima detecção
       }
 
+      // Se passar muito tempo sem confirmação, volta para IDLE
       if (now - lastTriggerTime > TIMEOUT) {
         state = IDLE;
       }
       break;
 
+    // Se B foi ativado, espera por A para confirmar saída
     case B_TRIGGERED:
       if (trigA) {
-        peopleCount--;
+        if (peopleCount > 0) {
+          peopleCount--;
+        }
+        totalExits++;
 
-        String payload = String("{") +
-          "\"device\":\"m5stickcplus2\"," +
-          "\"timestamp\":\"" + String(timestamp) + "\"," +
-          "\"event\":\"exit\"," +
-          "\"count\":" + String(peopleCount) + "," +
-          "\"sensor_A_mm\":" + String(dist1) + "," +
-          "\"sensor_B_mm\":" + String(dist2) +
-        "}";
+        sendEvent("exit");
 
-        Serial.println(payload);
-        client.publish(MQTT_TOPIC, payload.c_str());
-
-        state = IDLE;
+        state = IDLE; // reset para próxima detecção
       }
-
+      
       if (now - lastTriggerTime > TIMEOUT) {
         state = IDLE;
       }
       break;
   }
 
-  delay(20);
+  delay(5);
 }
