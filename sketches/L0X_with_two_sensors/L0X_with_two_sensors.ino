@@ -57,24 +57,37 @@ void wifiConnect() {
   WiFi.begin(SSID, PASS);
 
   Serial.print("A ligar ao WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
+
+  unsigned long startAttemptTime = millis();
+
+  while (WiFi.status() != WL_CONNECTED &&
+         millis() - startAttemptTime < 10000) {
+
     delay(300);
     Serial.print(".");
   }
-  Serial.println("\nWiFi ligado!");
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi ligado!");
+  } else {
+    Serial.println("\nFalha no WiFi.");
+  }
 }
 
 // Conectar ao MQTT
 void mqttConnect() {
-  while (!client.connected()) {
-    Serial.print("A ligar ao MQTT...");
-    if (client.connect("m5stick-client")) {
-      Serial.println(" ligado!");
-    } else {
-      Serial.print(" erro=");
-      Serial.println(client.state());
-      delay(2000);
-    }
+  // Só tenta se houver WiFi
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  Serial.print("A ligar ao MQTT...");
+
+  if (client.connect("m5stick-client")) {
+    Serial.println(" ligado!");
+  } else {
+    Serial.print(" erro=");
+    Serial.println(client.state());
   }
 }
 
@@ -112,9 +125,67 @@ void sendEvent(const char* eventType) {
   }
 }
 
+// Função de display
+void drawDisplay() {
+  M5.Lcd.fillScreen(BLACK);
+
+  M5.Lcd.setTextColor(WHITE);
+  M5.Lcd.setTextSize(2);
+
+  // Ocupação
+  M5.Lcd.setCursor(10, 15);
+  M5.Lcd.printf("Ocupacao: %d", peopleCount);
+
+  // WiFi
+  M5.Lcd.setCursor(10, 55);
+  M5.Lcd.setTextColor(WHITE);
+  M5.Lcd.print("WiFi: ");
+
+  if (WiFi.status() == WL_CONNECTED) {
+    M5.Lcd.setTextColor(GREEN);
+    M5.Lcd.println("OK");
+  } else {
+    M5.Lcd.setTextColor(RED);
+    M5.Lcd.println("OFF");
+  }
+
+  // MQTT
+  M5.Lcd.setCursor(10, 75);
+  M5.Lcd.setTextColor(WHITE);
+  M5.Lcd.print("MQTT: ");
+
+  if (client.connected()) {
+    M5.Lcd.setTextColor(GREEN);
+    M5.Lcd.println("OK");
+  } else {
+    M5.Lcd.setTextColor(RED);
+    M5.Lcd.println("OFF");
+  }
+
+  // Bateria
+  int battery = M5.Power.getBatteryLevel();
+
+  M5.Lcd.setCursor(10, 95);
+  M5.Lcd.setTextColor(WHITE);
+  M5.Lcd.print("Bateria: ");
+
+  if (battery > 30) {
+    M5.Lcd.setTextColor(GREEN);
+  }
+  else if (battery > 15) {
+    M5.Lcd.setTextColor(YELLOW);
+  }
+  else {
+    M5.Lcd.setTextColor(RED);
+  }
+
+  M5.Lcd.printf("%d%%", battery);
+}
+
 // Setup
 void setup() {
   M5.begin(); // Inicializa o M5StickC Plus 2
+  M5.Lcd.setRotation(1);
   Serial.begin(115200); 
   Wire.begin(); // Inicializa I2C
 
@@ -141,8 +212,20 @@ void setup() {
   configTime(0, 3600, "pool.ntp.org");
 
   struct tm timeinfo;
-  while (!getLocalTime(&timeinfo)) {
-    delay(1000);
+
+  unsigned long ntpStart = millis();
+
+  while (!getLocalTime(&timeinfo) &&
+        millis() - ntpStart < 5000) {
+
+      delay(500);
+      Serial.println("A aguardar NTP...");
+  }
+
+  if (getLocalTime(&timeinfo)) {
+      Serial.println("Hora sincronizada.");
+  } else {
+      Serial.println("Falha NTP.");
   }
 
   Serial.println("Sistema pronto.");
@@ -150,6 +233,11 @@ void setup() {
 
 // Loop
 void loop() {
+  // Tentar reconectar WiFi se falhar
+  if (WiFi.status() != WL_CONNECTED) {
+    WiFi.reconnect();
+  }
+
   if (!client.connected()) {
     mqttConnect();
   }
@@ -241,6 +329,14 @@ void loop() {
         state = IDLE;
       }
       break;
+  }
+
+  // Atualizar display a cada 500 ms
+  static unsigned long lastDisplayUpdate = 0;
+
+  if (millis() - lastDisplayUpdate > 500) {
+    drawDisplay();
+    lastDisplayUpdate = millis();
   }
 
   delay(5);
