@@ -38,30 +38,40 @@ router.get("/current", (req, res) => {
 // Obter estatísticas (entradas e saídas) por hora
 router.get("/stats/hourly", (req, res) => {
 
+    const date = req.query.date;
+
     const rows = db.prepare(`
+
         SELECT
-            strftime('%H', timestamp) AS hour,
+
+            strftime('%H', timestamp)
+            AS hour,
 
             SUM(
                 CASE
-                    WHEN event = 'entry' THEN 1
+                    WHEN event = 'entry'
+                    THEN 1
                     ELSE 0
                 END
             ) AS entries,
 
             SUM(
                 CASE
-                    WHEN event = 'exit' THEN 1
+                    WHEN event = 'exit'
+                    THEN 1
                     ELSE 0
                 END
             ) AS exits
 
         FROM events
 
+        WHERE date(timestamp) = ?
+
         GROUP BY hour
 
         ORDER BY hour
-    `).all();
+
+    `).all(date);
 
     res.json(rows);
 });
@@ -104,25 +114,90 @@ router.get("/stats/daily", (req, res) => {
     res.json(rows);
 });
 
+// Obter ocupação média por hora
+router.get("/stats/occupancy", (req, res) => {
+
+    const date = req.query.date;
+
+    const rows = db.prepare(`
+
+        SELECT
+
+            strftime('%H', timestamp)
+            AS hour,
+
+            AVG(people_inside)
+            AS average_occupancy
+
+        FROM events
+
+        WHERE date(timestamp) = ?
+
+        GROUP BY hour
+
+        ORDER BY hour
+
+    `).all(date);
+
+    res.json(rows);
+});
+
 // Obter o estado do sistema (online/offline) com base no tempo desde a última mensagem recebida
 router.get("/status", (req, res) => {
 
-    let online = false;
-    let secondsAgo = null;
+    const lastEvent = db.prepare(`
+        SELECT timestamp
+        FROM events
+        ORDER BY timestamp DESC
+        LIMIT 1
+    `).get();
 
-    if (lastMessageTime) {
+    if (!lastEvent) {
 
-        secondsAgo = Math.floor(
-            (Date.now() - lastMessageTime.getTime()) / 1000
-        );
+        return res.json({
 
-        online = secondsAgo <= 30;
+            online: false,
+            lastMessageSecondsAgo: null,
+        });
     }
 
+    const lastMessageTime =
+        new Date(lastEvent.timestamp);
+
+    const now = new Date();
+
+    const secondsAgo = Math.floor(
+        (now - lastMessageTime) / 1000
+    );
+
     res.json({
-        online,
-        lastMessageSecondsAgo: secondsAgo
+
+        online: secondsAgo < 10,
+
+        lastMessageSecondsAgo:
+            secondsAgo,
     });
+});
+
+// Obter dias disponíveis
+router.get("/dates", (req, res) => {
+
+    const rows = db.prepare(`
+
+        SELECT DISTINCT
+            date(timestamp) AS day
+
+        FROM events
+
+        ORDER BY day DESC
+
+    `).all();
+
+    const dates = rows.map(
+        row => row.day
+    );
+
+    res.json(dates);
 });
 
 export default router;
