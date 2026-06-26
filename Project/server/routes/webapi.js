@@ -1,7 +1,8 @@
 import express from "express";
-import db from "../database.js";
+import { db } from "../database.js";
 
 import { lastMessageTime } from "../systemState.js";
+import { getDeviceStatus } from "../deviceStatus.js";
 
 const router = express.Router();
 
@@ -11,7 +12,7 @@ router.get("/events", (req, res) => {
     const date = req.query.date;
 
     const rows = db.prepare(`
-        SELECT *
+        SELECT *, source
         FROM events
         WHERE date(timestamp) = ?
         ORDER BY timestamp ASC
@@ -114,6 +115,78 @@ router.get("/stats/daily", (req, res) => {
     res.json(rows);
 });
 
+// Obter estatísticas semanais (média de ocupação por dia)
+router.get("/stats/week", (req, res) => {
+
+    const rows = db.prepare(`
+
+        SELECT
+
+            date(timestamp) AS day,
+
+            AVG(people_inside) AS average_occupancy
+
+        FROM events
+
+        WHERE timestamp >= datetime('now', '-7 days')
+
+        GROUP BY day
+
+        ORDER BY day
+
+    `).all();
+
+    res.json(rows);
+});
+
+// Obter estatísticas de duas semanas (média de ocupação por dia)
+router.get("/stats/two-weeks", (req, res) => {
+
+    const rows = db.prepare(`
+
+        SELECT
+
+            date(timestamp) AS day,
+
+            AVG(people_inside) AS average_occupancy
+
+        FROM events
+
+        WHERE timestamp >= datetime('now', '-14 days')
+
+        GROUP BY day
+
+        ORDER BY day
+
+    `).all();
+
+    res.json(rows);
+});
+
+// Obter estatísticas mensais (média de ocupação por dia)
+router.get("/stats/month", (req, res) => {
+
+    const rows = db.prepare(`
+
+        SELECT
+
+            date(timestamp) AS day,
+
+            AVG(people_inside) AS average_occupancy
+
+        FROM events
+
+        WHERE timestamp >= datetime('now', '-30 days')
+
+        GROUP BY day
+
+        ORDER BY day
+
+    `).all();
+
+    res.json(rows);
+});
+
 // Obter ocupação média por hora
 router.get("/stats/occupancy", (req, res) => {
 
@@ -139,6 +212,18 @@ router.get("/stats/occupancy", (req, res) => {
 
     `).all(date);
 
+    res.json(rows);
+});
+
+// Obter estatísticas por fonte (MQTT, LoRa)
+router.get("/stats/sources", (req, res) => {
+    const rows = db.prepare(`
+        SELECT
+            source,
+            COUNT(*) as total
+        FROM events
+        GROUP BY source
+    `).all();
     res.json(rows);
 });
 
@@ -198,6 +283,15 @@ router.get("/dates", (req, res) => {
     );
 
     res.json(dates);
+});
+
+// Obter o status do dispositivo
+router.get("/devicestatus", (req, res) => {
+
+    res.json(
+        getDeviceStatus()
+    );
+
 });
 
 export default router;
