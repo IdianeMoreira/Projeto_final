@@ -4,19 +4,18 @@
 #include <PubSubClient.h>
 #include <Adafruit_VL53L0X.h>
 #include <time.h>
-
-// WiFi
-
-const char* SSID = "ZON-0770";
-const char* PASS = "ddb8d7a757cb";
+#include <WiFiManager.h>
 
 // MQTT
 const char* MQTT_SERVER = "broker.hivemq.com";
 const int MQTT_PORT = 1883;
 const char* MQTT_TOPIC = "sensor/m5stick/dual_tof";
+const char* MQTT_STATUS_TOPIC = "sensor/m5stick/status";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+
+WiFiManager wifiManager;
 
 // Sensores
 Adafruit_VL53L0X lox1;
@@ -51,44 +50,30 @@ void pabhubSelectChannel(uint8_t channel) {
   Wire.endTransmission();
 }
 
-// Conectar ao WiFi
-void wifiConnect() {
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(SSID, PASS);
-
-  Serial.print("A ligar ao WiFi");
-
-  unsigned long startAttemptTime = millis();
-
-  while (WiFi.status() != WL_CONNECTED &&
-         millis() - startAttemptTime < 10000) {
-
-    delay(300);
-    Serial.print(".");
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWiFi ligado!");
-  } else {
-    Serial.println("\nFalha no WiFi.");
-  }
-}
-
 // Conectar ao MQTT
-void mqttConnect() {
-  // Só tenta se houver WiFi
-  if (WiFi.status() != WL_CONNECTED) {
-    return;
-  }
+void mqttConnect()
+{
+    while (
+        WiFi.status() == WL_CONNECTED &&
+        !client.connected()
+    )
+    {
+        Serial.print("Connecting MQTT...");
 
-  Serial.print("A ligar ao MQTT...");
+        if (client.connect("m5stick-client"))
+        {
+            Serial.println(" connected!");
 
-  if (client.connect("m5stick-client")) {
-    Serial.println(" ligado!");
-  } else {
-    Serial.print(" erro=");
-    Serial.println(client.state());
-  }
+            sendStatus();
+        }
+        else
+        {
+            Serial.print(" failed: ");
+            Serial.println(client.state());
+
+            delay(3000);
+        }
+    }
 }
 
 // Função para determinar se a distância indica presença de pessoa
@@ -125,6 +110,23 @@ void sendEvent(const char* eventType) {
   }
 }
 
+void sendStatus() {
+
+  String payload =
+    "{"
+    "\"wifi\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false") +
+    ",\"mqtt\":" + String(client.connected() ? "true" : "false") +
+    ",\"battery\":" + String(M5.Power.getBatteryLevel()) +
+    "}";
+
+  Serial.print("STATUS -> ");
+  Serial.println(payload);
+
+  if (client.connected()) {
+    client.publish(MQTT_STATUS_TOPIC, payload.c_str());
+  }
+}
+
 // Função de display
 void drawDisplay() {
   M5.Lcd.fillScreen(BLACK);
@@ -134,7 +136,7 @@ void drawDisplay() {
 
   // Ocupação
   M5.Lcd.setCursor(10, 15);
-  M5.Lcd.printf("Ocupacao: %d", peopleCount);
+  M5.Lcd.printf("Ocupation: %d", peopleCount);
 
   // WiFi
   M5.Lcd.setCursor(10, 55);
@@ -205,7 +207,39 @@ void setup() {
     while (1);
   }
 
-  wifiConnect();
+  Serial.println("Connecting WiFi...");
+
+  wifiManager.setAPCallback([](WiFiManager* wm) {
+    M5.Lcd.fillScreen(BLACK);
+    M5.Lcd.setTextColor(YELLOW);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setCursor(10, 15);
+    M5.Lcd.println("Setup WiFi:");
+    M5.Lcd.setCursor(10, 45);
+    M5.Lcd.println("1. Connect to:");
+    M5.Lcd.setCursor(10, 65);
+    M5.Lcd.setTextColor(WHITE);
+    M5.Lcd.println("SmartOccupancy");
+    M5.Lcd.setCursor(10, 85);
+    M5.Lcd.setTextColor(YELLOW);
+    M5.Lcd.println("2. Open:");
+    M5.Lcd.setCursor(10, 105);
+    M5.Lcd.setTextColor(WHITE);
+    M5.Lcd.println("192.168.4.1");
+  });
+
+  wifiManager.setConfigPortalTimeout(180);
+
+  if (!wifiManager.autoConnect("SmartOccupancy_Setup"))
+  {
+      Serial.println("Failed to connect");
+      ESP.restart();
+  }
+
+  Serial.println("WiFi connected!");
+  Serial.print("IP: ");
+  Serial.println(WiFi.localIP());
+
   client.setServer(MQTT_SERVER, MQTT_PORT); // Configura MQTT
 
   // NTP
@@ -233,9 +267,17 @@ void setup() {
 
 // Loop
 void loop() {
-  // Tentar reconectar WiFi se falhar
-  if (WiFi.status() != WL_CONNECTED) {
-    WiFi.reconnect();
+  M5.update();
+
+  if (M5.BtnA.wasPressed())
+  {
+      Serial.println("Reset WiFi settings");
+
+      wifiManager.resetSettings();
+
+      delay(1000);
+
+      ESP.restart();
   }
 
   if (!client.connected()) {
@@ -337,6 +379,18 @@ void loop() {
   if (millis() - lastDisplayUpdate > 500) {
     drawDisplay();
     lastDisplayUpdate = millis();
+  }
+
+  static unsigned long lastStatus = 0;
+
+  if (
+      client.connected() &&
+      millis() - lastStatus > 10000
+  )
+  {
+      sendStatus();
+
+      lastStatus = millis();
   }
 
   delay(5);
