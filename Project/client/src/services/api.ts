@@ -133,3 +133,155 @@ export async function getAvailableDates() {
         return [];
     }
 }
+
+// ---------------- Weekly Stats ----------------
+export async function getWeekStats() {
+
+    try {
+
+        const response = await fetch(
+            `${API_URL}/stats/week`
+        );
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Failed to fetch weekly stats"
+            );
+        }
+
+        return await response.json();
+
+    } catch (err) {
+
+        console.error(err);
+
+        return [];
+    }
+}
+
+// ---------------- Two Weeks Stats ----------------
+export async function getTwoWeeksStats() {
+
+    try {
+
+        const response = await fetch(
+            `${API_URL}/stats/two-weeks`
+        );
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Failed to fetch two weeks stats"
+            );
+        }
+
+        return await response.json();
+
+    } catch (err) {
+
+        console.error(err);
+
+        return [];
+    }
+}
+
+export async function getMonthStats() {
+
+    try {
+
+        const response = await fetch(
+            `${API_URL}/stats/month`
+        );
+
+        if (!response.ok) {
+            throw new Error("Failed to fetch monthly stats");
+        }
+
+        return await response.json();
+
+    } catch (err) {
+
+        console.error(err);
+
+        return [];
+    }
+}
+
+// ---------------- Authentication ----------------
+
+export async function login(
+  username: string,
+  password: string
+) {
+
+  const response = await fetch(
+    `${API_URL}/login`,
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json"
+      },
+
+      body: JSON.stringify({
+        username,
+        password
+      })
+    }
+  );
+
+  return response.json();
+
+}
+
+export async function register(
+  username: string,
+  password: string
+) {
+
+  const response = await fetch(
+    `${API_URL}/register`,
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json"
+      },
+
+      body: JSON.stringify({
+        username,
+        password
+      })
+    }
+  );
+
+  return response.json();
+
+}
+
+// ---------------- Device Status ----------------
+
+export async function getDeviceStatus() {
+
+    try {
+
+        const response = await fetch(
+            `${API_URL}/devicestatus`
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                "Failed to fetch device status"
+            );
+        }
+
+        return await response.json();
+
+    } catch (err) {
+
+        console.error(err);
+
+        return null;
+    }
+}

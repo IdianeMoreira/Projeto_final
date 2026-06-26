@@ -32,11 +32,11 @@ function OccupancyChart({
 }: Props) {
 
   const labels = data.map(
-    (item) => item.hour
+    item => item.hour
   );
 
   const occupancy = data.map(
-    (item) => item.average_occupancy
+    item => item.average_occupancy
   );
 
   const chartData = {
@@ -44,22 +44,51 @@ function OccupancyChart({
     labels,
 
     datasets: [
-
       {
         label: "Average Occupancy",
-
         data: occupancy,
-
+        borderColor: "rgba(45,125,144,0.6)",
+        backgroundColor: "rgba(45,125,144,0.2)",
         tension: 0.3,
       },
     ],
   };
 
+  const options = {
+
+    responsive: true,
+
+    maintainAspectRatio: false,
+
+    plugins: {
+
+      legend: {
+        position: "top" as const
+      }
+
+    }
+
+  };
+
   return (
 
-    <Line data={chartData} />
+    <div
+      className="
+        h-[425px]
+        max-w-5xl
+        mx-auto
+      "
+    >
+
+      <Line
+        data={chartData}
+        options={options}
+      />
+
+    </div>
 
   );
+
 }
 
 export default OccupancyChart;

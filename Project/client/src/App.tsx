@@ -1,27 +1,48 @@
 import { useEffect, useState } from "react";
 
-import OccupancyChart
-from "@/components/OccupancyChart";
+import Header from "@/components/Header";
 
-import FlowChart
-from "@/components/FlowChart";
+import HomePage
+from "@/components/pages/HomePage";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import DailyAveragePage
+from "@/components/pages/DailyAveragePage";
+
+import DailyFlowPage
+from "@/components/pages/DailyFlowPage";
+
+import WeekPage
+from "@/components/pages/WeekPage";
+
+import TwoWeeksPage
+from "@/components/pages/TwoWeeksPage";
+
+import MonthPage
+from "@/components/pages/MonthPage";
+
+import LoginPage
+from "@/components/pages/LoginPage";
+
+import RegisterPage
+from "@/components/pages/RegisterPage";
 
 import {
   getCurrentOccupancy,
   getSystemStatus,
-  getOccupancyStats,
   getAvailableDates,
-  getHourlyStats
-} from "@/services/api";
+  getOccupancyStats,
+  getHourlyStats,
+  getWeekStats,
+  getTwoWeeksStats,
+  getMonthStats,
+  getDeviceStatus
+}
+from "@/services/api";
 
 function App() {
+
+  const [page, setPage] =
+    useState("home");
 
   const [peopleInside, setPeopleInside] =
     useState(0);
@@ -29,53 +50,45 @@ function App() {
   const [status, setStatus] =
     useState<any>(null);
 
-  const [occupancyStats, setOccupancyStats] =
-    useState<any[]>([]);
-
   const [availableDates, setAvailableDates] =
     useState<string[]>([]);
 
   const [selectedDate, setSelectedDate] =
     useState("");
 
+  const [occupancyStats, setOccupancyStats] =
+    useState<any[]>([]);
+
   const [hourlyStats, setHourlyStats] =
     useState<any[]>([]);
 
+  const [weekStats, setWeekStats] =
+    useState<any[]>([]);
+
+  const [twoWeeksStats, setTwoWeeksStats] =
+    useState<any[]>([]);
+
+  const [monthStats, setMonthStats] =
+    useState<any[]>([]);
+
+  const [loggedUser, setLoggedUser] =
+    useState("");
+
+  const [deviceStatus, setDeviceStatus] =
+    useState<any>(null);
+
+  //
+  // HOME
+  //
   useEffect(() => {
 
-    async function fetchData() {
+    async function fetchHomeData() {
 
       const occupancy =
         await getCurrentOccupancy();
 
       const systemStatus =
         await getSystemStatus();
-
-      const dates =
-        await getAvailableDates();
-
-      setAvailableDates(dates);
-
-      if (dates.length > 0) {
-
-        setSelectedDate(dates[0]);
-
-        const occupancyStats =
-          await getOccupancyStats(
-            dates[0]
-          );
-
-        setOccupancyStats(
-          occupancyStats
-        );
-
-        const hourly =
-          await getHourlyStats(
-            dates[0]
-          );
-
-        setHourlyStats(hourly);
-      }
 
       if (occupancy) {
 
@@ -88,221 +101,320 @@ function App() {
 
         setStatus(systemStatus);
       }
+
+      const deviceStatus =
+        await getDeviceStatus();
+
+      if (deviceStatus) {
+
+        setDeviceStatus(deviceStatus);
+      }
     }
 
-    fetchData();
+    fetchHomeData();
+
+    const interval =
+      setInterval(
+        fetchHomeData,
+        5000
+      );
+
+    return () =>
+      clearInterval(interval);
 
   }, []);
 
-  async function handleDateChange(
-    date: string
-  ) {
+  //
+  // Datas disponíveis
+  //
+  useEffect(() => {
 
-    setSelectedDate(date);
+    async function fetchDates() {
 
-    const stats =
-      await getOccupancyStats(date);
+      const dates =
+        await getAvailableDates();
 
-    setOccupancyStats(stats);
+      setAvailableDates(dates);
 
-    const hourly =
-      await getHourlyStats(date);
+      if (
+        dates.length > 0 &&
+        selectedDate === ""
+      ) {
 
-    setHourlyStats(hourly);
-  }
+        setSelectedDate(
+          dates[0]
+        );
+      }
+    }
+
+    fetchDates();
+
+  }, []);
+
+  //
+  // Daily Average
+  //
+  useEffect(() => {
+
+    if (
+      page !== "dailyAverage" ||
+      !selectedDate
+    )
+      return;
+
+    async function fetchChart() {
+
+      setOccupancyStats(
+        await getOccupancyStats(
+          selectedDate
+        )
+      );
+    }
+
+    fetchChart();
+
+    const interval =
+      setInterval(
+        fetchChart,
+        5000
+      );
+
+    return () =>
+      clearInterval(interval);
+
+  }, [page, selectedDate]);
+
+  //
+  // Daily Flow
+  //
+  useEffect(() => {
+
+    if (
+      page !== "dailyFlow" ||
+      !selectedDate
+    )
+      return;
+
+    async function fetchFlow() {
+
+      setHourlyStats(
+        await getHourlyStats(
+          selectedDate
+        )
+      );
+    }
+
+    fetchFlow();
+
+    const interval =
+      setInterval(
+        fetchFlow,
+        5000
+      );
+
+    return () =>
+      clearInterval(interval);
+
+  }, [page, selectedDate]);
+
+  //
+  // Week
+  //
+  useEffect(() => {
+
+    if (page !== "week")
+      return;
+
+    async function fetchWeek() {
+
+      setWeekStats(
+        await getWeekStats()
+      );
+    }
+
+    fetchWeek();
+
+  }, [page]);
+
+  //
+  // Two Weeks
+  //
+  useEffect(() => {
+
+    if (page !== "twoWeeks")
+      return;
+
+    async function fetchTwoWeeks() {
+
+      setTwoWeeksStats(
+        await getTwoWeeksStats()
+      );
+    }
+
+    fetchTwoWeeks();
+
+  }, [page]);
+
+  //
+  // Month
+  //
+  useEffect(() => {
+
+    if (page !== "month")
+      return;
+
+    async function fetchMonth() {
+
+      setMonthStats(
+        await getMonthStats()
+      );
+    }
+
+    fetchMonth();
+
+  }, [page]);
 
   return (
-    <div className="
-      min-h-screen
-      bg-background
-      p-10
-    ">
 
-      <h1 className="
-        text-5xl
-        font-bold
-        mb-10
-      ">
+    <div
+      className="
+        min-h-screen
+        bg-background
+        p-10
+        max-w-7xl
+        mx-auto
+      "
+    >
 
-        Smart Occupancy Dashboard
+      <Header
+        setPage={setPage}
+        loggedUser={loggedUser}
+        setLoggedUser={setLoggedUser}
+      />
 
-      </h1>
+      {
+        page === "home" && (
 
-      {/* TOP CARDS */}
+          <HomePage
 
-      <div className="
-        grid
-        grid-cols-1
-        md:grid-cols-2
-        gap-6
-      ">
+            peopleInside={
+              peopleInside
+            }
 
-        <Card>
+            status={
+              status
+            }
 
-          <CardHeader>
+            deviceStatus={
+              deviceStatus
+            }
 
-            <CardTitle>
-              Current Occupancy
-            </CardTitle>
+          />
 
-          </CardHeader>
+        )
+      }
 
-          <CardContent>
+      {
+        page === "dailyAverage" && (
 
-            <p className="
-              text-6xl
-              font-bold
-            ">
+          <DailyAveragePage
 
-              {peopleInside}
+            data={
+              occupancyStats
+            }
 
-            </p>
+            selectedDate={
+              selectedDate
+            }
 
-          </CardContent>
+            availableDates={
+              availableDates
+            }
 
-        </Card>
+            setSelectedDate={
+              setSelectedDate
+            }
 
-        <Card>
+          />
 
-          <CardHeader>
+        )
+      }
 
-            <CardTitle>
-              System Status
-            </CardTitle>
+      {
+        page === "dailyFlow" && (
 
-          </CardHeader>
+          <DailyFlowPage
+            data={hourlyStats}
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            availableDates={availableDates}
+          />
 
-          <CardContent>
+        )
+      }
 
-            <p className="
-              text-2xl
-              font-semibold
-            ">
+      {
+        page === "week" && (
 
-              {
-                status?.online
-                  ? "Online"
-                  : "Offline"
-              }
+          <WeekPage
 
-            </p>
+            data={
+              weekStats
+            }
 
-            <p className="mt-4">
+          />
 
-              Last message:
+        )
+      }
 
-              {" "}
+      {
+        page === "twoWeeks" && (
 
-              {
-                status?.lastMessageSecondsAgo
-                  != null
+          <TwoWeeksPage
 
-                  ? `${status.lastMessageSecondsAgo}s ago`
+            data={
+              twoWeeksStats
+            }
 
-                  : "No data"
-              }
+          />
 
-            </p>
+        )
+      }
 
-          </CardContent>
+      {
+        page === "month" && (
 
-        </Card>
+          <MonthPage
 
-      </div>
+            data={
+              monthStats
+            }
 
-      {/* OCCUPANCY CHART */}
+          />
 
-      <div className="mt-10">
+        )
+      }
 
-        <Card>
+      {
+        page === "login" && (
 
-          <CardHeader>
+          <LoginPage 
+            setPage={setPage}
+            setLoggedUser={setLoggedUser}
+          />
 
-            <CardTitle>
-              Occupancy Over Time
-            </CardTitle>
+        )
+      }
 
-          </CardHeader>
+      {
+        page === "register" && (
 
-          <CardContent>
+          <RegisterPage 
+            setPage={setPage}
+          />
 
-            {/* DATE SELECTOR */}
-
-            <div className="mb-6">
-
-              <select
-
-                value={selectedDate}
-
-                onChange={(e) =>
-                  handleDateChange(
-                    e.target.value
-                  )
-                }
-
-                className="
-                  border
-                  rounded-md
-                  p-2
-                "
-              >
-
-                {
-                  availableDates.map(
-                    (date) => (
-
-                      <option
-                        key={date}
-                        value={date}
-                      >
-
-                        {date}
-
-                      </option>
-                    )
-                  )
-                }
-
-              </select>
-
-            </div>
-
-            {/* CHART */}
-
-            <OccupancyChart
-              data={occupancyStats}
-            />
-
-          </CardContent>
-
-        </Card>
-
-      </div>
-
-      
-      <div className="mt-10">
-
-        <Card>
-
-          <CardHeader>
-
-            <CardTitle>
-              Entries vs Exits
-            </CardTitle>
-
-          </CardHeader>
-
-          <CardContent>
-
-            <FlowChart
-              data={hourlyStats}
-            />
-
-          </CardContent>
-
-        </Card>
-
-      </div>
+        )
+      }
 
     </div>
   );
