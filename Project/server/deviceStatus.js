@@ -3,23 +3,51 @@ let deviceStatus = {
     mqtt: false,
     lora: false,
     battery: 0,
-    lastUpdate: null
+
+    lastStatusUpdate: null,
+    lastLoRaUpdate: null
 };
 
 export function updateDeviceStatus(newStatus) {
-    deviceStatus = { ...deviceStatus, ...newStatus, lastUpdate: Date.now() };
+
+    deviceStatus = {
+        ...deviceStatus,
+        ...newStatus,
+        lastStatusUpdate: Date.now()
+    };
+}
+
+export function updateLoRaStatus() {
+
+    deviceStatus.lora = true;
+    deviceStatus.lastLoRaUpdate = Date.now();
 }
 
 export function getDeviceStatus() {
 
-    const offline =
-        !deviceStatus.lastUpdate ||
-        Date.now() - deviceStatus.lastUpdate > 15000;
+    const mqttOffline =
+        !deviceStatus.lastStatusUpdate ||
+        Date.now() - deviceStatus.lastStatusUpdate > 15000;
+
+    const loraOffline =
+        !deviceStatus.lastLoRaUpdate ||
+        Date.now() - deviceStatus.lastLoRaUpdate > 300000; // 5 min
 
     return {
-        wifi: offline ? false : deviceStatus.wifi,
-        mqtt: offline ? false : deviceStatus.mqtt,
-        lora: offline ? false : deviceStatus.lora,
-        battery: offline ? null : deviceStatus.battery
+        wifi: mqttOffline
+            ? false
+            : deviceStatus.wifi,
+
+        mqtt: mqttOffline
+            ? false
+            : deviceStatus.mqtt,
+
+        lora: loraOffline
+            ? false
+            : deviceStatus.lora,
+
+        battery: mqttOffline
+            ? null
+            : deviceStatus.battery
     };
 }

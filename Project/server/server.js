@@ -2,26 +2,25 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-console.log("Current directory:", process.cwd());
-console.log("TTN KEY:", process.env.TTN_API_KEY);
-
 import express from "express";
 import cors from "cors";
 import mqtt from "mqtt";
 
 import apiRoutes from "./routes/webapi.js";
 import userRoutes from "./routes/users.js";
-import { updateDeviceStatus } from "./deviceStatus.js";
+import { updateDeviceStatus, updateLoRaStatus } from "./deviceStatus.js";
 
 import { logEvent } from "./eventLogger.js";
 import { updateLastMessageTime } from "./systemState.js";
+import { updateLastTTNTimestamp } from "./systemState.js";
+import { saveLastTTN, loadLastTTN, recoverMessages } from "./ttnRecovery.js";
+import { toLisbonTimestamp, processTTNMessage } from "./utils.js";
 
 const app = express();
 
 // TTN MQTT
 const TTN_APP_ID = "smart-occupancy";
 const TTN_API_KEY = process.env.TTN_API_KEY;
-console.log("TTN KEY:", TTN_API_KEY?.substring(0,10));
 const TTN_SERVER = "mqtts://eu1.cloud.thethings.network:8883";
 
 // Configura o servidor Express
@@ -44,22 +43,6 @@ const ttnClient = mqtt.connect(TTN_SERVER, {
     username: `${TTN_APP_ID}@ttn`,
     password: TTN_API_KEY
 });
-
-// Converte uma data UTC para o formato "YYYY-MM-DD HH:MM:SS" na hora local de Lisboa,
-// ajustando automaticamente para horário de verão/inverno (WEST/WET)
-function toLisbonTimestamp(date) {
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Europe/Lisbon",
-        year: "numeric", month: "2-digit", day: "2-digit",
-        hour: "2-digit", minute: "2-digit", second: "2-digit",
-        hour12: false
-    });
-
-    const parts = formatter.formatToParts(date);
-    const get = (type) => parts.find(p => p.type === type).value;
-
-    return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
-}
 
 // Conecta o servidor ao broker MQTT e se inscreve no tópico
 client.on("connect", () => {
@@ -143,63 +126,9 @@ ttnClient.on("message", (topic, message) => {
         const body =
             JSON.parse(message.toString());
 
-        const base64 =
-            body?.uplink_message?.frm_payload;
+        updateLoRaStatus();
 
-        if (!base64)
-            return;
-
-        const decoded =
-            Buffer
-                .from(base64, "base64")
-                .toString("utf8");
-
-        console.log(
-            "TTN payload:",
-            decoded
-        );
-
-        const parts =
-            decoded.split(",");
-
-        if (parts.length !== 4)
-            return;
-
-        const [
-            eventCode,
-            peopleInside,
-            totalEntries,
-            totalExits
-        ] = parts;
-
-        const event =
-            eventCode === "E"
-                ? "entry"
-                : "exit";
-
-        const timestamp =
-            body?.received_at
-                ? toLisbonTimestamp(
-                    new Date(body.uplink_message.received_at)
-                  )
-                : toLisbonTimestamp(
-                    new Date()
-                  );
-
-        updateLastMessageTime();
-
-        logEvent({
-            timestamp,
-            event,
-            people_inside:
-                parseInt(peopleInside),
-
-            total_entries:
-                parseInt(totalEntries),
-
-            total_exits:
-                parseInt(totalExits)
-        }, "lora");
+        processTTNMessage(body);
 
     }
     catch(err) {
@@ -211,6 +140,41 @@ ttnClient.on("message", (topic, message) => {
     }
 });
 
-app.listen(PORT, () => {
+// Guarda o último timestamp do TTN no banco de dados e carrega-o na inicialização do servidor
+const lastTimestamp = loadLastTTN();
+console.log("Last TTN timestamp loaded:", lastTimestamp);
+
+app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
+
+    // Recupera mensagens do TTN após o último timestamp salvo
+    if (lastTimestamp) {
+
+        try {
+
+            const messages =
+                await recoverMessages(
+                    lastTimestamp
+                );
+
+            console.log(
+                "Recovered",
+                messages.length,
+                "messages"
+            );
+
+            for (const body of messages) {
+
+                processTTNMessage(body);
+
+            }
+        }
+        catch(err) {
+
+            console.error(
+                "Recovery error:",
+                err
+            );
+        }
+    }
 });
