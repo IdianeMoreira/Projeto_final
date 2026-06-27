@@ -5,12 +5,18 @@
 #include <Adafruit_VL53L0X.h>
 #include <time.h>
 #include <WiFiManager.h>
+#include <queue>
 
 // MQTT
 const char* MQTT_SERVER = "broker.hivemq.com";
 const int MQTT_PORT = 1883;
 const char* MQTT_TOPIC = "sensor/m5stick/dual_tof";
 const char* MQTT_STATUS_TOPIC = "sensor/m5stick/status";
+
+// QUEUE
+std::queue<String> loraQueue;
+bool loraBusy = false;
+const int MAX_LORA_QUEUE = 20;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -83,14 +89,24 @@ String sendAT(const char* cmd, int waitMs = 2000) {
   return response;
 }
 
+// Envia comando AT sem esperar resposta
+void sendATNoWait(const char* cmd) {
+  rakSerial.println(cmd);
+
+  Serial.print("RAK TX: ");
+  Serial.println(cmd);
+}
+
 // Enviar dados via LoRaWAN
 void sendLoRa(const char* eventType) {
+
   if (!loraJoined) {
-    Serial.println("Lora not joined");
+    Serial.println("LoRa not joined");
     return;
   }
 
   char payload[32];
+
   snprintf(
     payload,
     sizeof(payload),
@@ -101,23 +117,65 @@ void sendLoRa(const char* eventType) {
     totalExits
   );
 
-  // Converter para hex - AT+SEND exige hexadecimal, não texto
+  // converter para hexadecimal
   String hexPayload = "";
+
   for (size_t i = 0; i < strlen(payload); i++) {
+
     char hexByte[3];
-    snprintf(hexByte, sizeof(hexByte), "%02X", (uint8_t)payload[i]);
+
+    snprintf(
+      hexByte,
+      sizeof(hexByte),
+      "%02X",
+      (uint8_t)payload[i]
+    );
+
     hexPayload += hexByte;
   }
 
-  char cmd[80];
-  snprintf(cmd, sizeof(cmd), "AT+SEND=1:%s", hexPayload.c_str());
+  if (loraQueue.size() < MAX_LORA_QUEUE) {
 
-  Serial.print("Sending LoRa: ");
-  Serial.println(cmd);
+      loraQueue.push(hexPayload);
 
-  String response = sendAT(cmd, 8000);
-  Serial.println("RAK response:");
-  Serial.println(response);
+      Serial.print("Queued LoRa: ");
+      Serial.println(hexPayload);
+  }
+  else {
+
+      Serial.println("LoRa queue full");
+  }
+}
+
+void processLoRaQueue() {
+
+    if (!loraJoined)
+        return;
+
+    if (loraBusy)
+        return;
+
+    if (loraQueue.empty())
+        return;
+
+    String payload = loraQueue.front();
+    loraQueue.pop();
+
+    char cmd[80];
+
+    snprintf(
+        cmd,
+        sizeof(cmd),
+        "AT+SEND=1:%s",
+        payload.c_str()
+    );
+
+    Serial.print("Sending LoRa: ");
+    Serial.println(cmd);
+
+    loraBusy = true;
+
+    sendATNoWait(cmd);
 }
 
 // Enviar evento MQTT + LoRaWAN
@@ -157,6 +215,52 @@ void sendStatus() {
 
   if (client.connected()) {
     client.publish(MQTT_STATUS_TOPIC, payload.c_str());
+  }
+}
+
+// Lê respostas do RAK sem bloquear
+void checkLoRaResponses() {
+
+  while (rakSerial.available()) {
+
+    
+    String line =
+        rakSerial.readStringUntil('\n');
+
+    line.trim();
+
+    if (line.length() == 0)
+        continue;
+
+    Serial.print("RAK RX: ");
+    Serial.println(line);
+
+    // transmissão concluída
+    if (line.indexOf("+EVT:TX_DONE") != -1) {
+
+        Serial.println(
+            "LoRa TX completed"
+        );
+
+        loraBusy = false;
+    }
+
+    // join OK
+    if (line.indexOf("JOINED") != -1 ||
+        line.indexOf("Join Success") != -1) {
+
+        loraJoined = true;
+
+        Serial.println(
+            "LoRa joined."
+        );
+    }
+
+    // join perdido
+    if (line.indexOf("JOIN_FAILED") != -1) {
+
+        loraJoined = false;
+    }
   }
 }
 
@@ -374,6 +478,11 @@ void loop() {
     mqttConnect();
   }
   client.loop();
+
+  // verificar respostas do RAK sem bloquear
+  checkLoRaResponses();
+
+  processLoRaQueue();
 
   VL53L0X_RangingMeasurementData_t m1, m2;
 
