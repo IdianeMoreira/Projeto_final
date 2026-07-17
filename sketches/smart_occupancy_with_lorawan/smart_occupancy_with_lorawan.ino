@@ -288,8 +288,6 @@ void setupLoRa() {
   Serial.println("Liga o G0 agora! A aguardar 10 segundos...");
   delay(10000);
 
-  // Reconfigurar sempre, por segurança - caso o módulo tenha
-  // perdido a configuração (reset de fábrica inesperado pelo G0)
   sendAT("AT+DEVEUI=70B3D57ED007828C");
   sendAT("AT+APPEUI=0000000000000000");
   sendAT("AT+APPKEY=08CEF571424F558C969ED035170B7569");
@@ -505,7 +503,7 @@ void loop() {
   prevB = currB;
 
   unsigned long now = millis();
-  /*
+  
   Serial.print("A: ");
   Serial.print(dist1);
   Serial.print(" mm | B: ");
@@ -513,7 +511,7 @@ void loop() {
   Serial.print(" mm | trigA=");
   Serial.print(trigA);
   Serial.print(" | trigB=");
-  Serial.println(trigB); */
+  Serial.println(trigB); 
 
   switch (state) {
     case IDLE:

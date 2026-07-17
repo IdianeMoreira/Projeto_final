@@ -1,5 +1,6 @@
 import { db } from "./database.js";
 
+// Função para registrar eventos na base de dados
 export function logEvent(data, source = "mqtt") {
 
     // Verifica se já existe evento igual nos últimos 10 segundos

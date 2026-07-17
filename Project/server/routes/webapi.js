@@ -294,4 +294,55 @@ router.get("/devicestatus", (req, res) => {
 
 });
 
+// Obter meses disponíveis
+router.get("/months", (req, res) => {
+ 
+    const rows = db.prepare(`
+ 
+        SELECT DISTINCT
+            strftime('%Y-%m', timestamp) AS month
+ 
+        FROM events
+ 
+        ORDER BY month DESC
+ 
+    `).all();
+ 
+    const months = rows.map(row => row.month);
+ 
+    res.json(months);
+});
+ 
+// Obter estatísticas de um mês específico (média de ocupação por dia)
+router.get("/stats/monthly", (req, res) => {
+ 
+    const month = req.query.month; // ex: "2026-06"
+ 
+    if (!month) {
+        return res.status(400).json({
+            error: "Missing month parameter"
+        });
+    }
+ 
+    const rows = db.prepare(`
+ 
+        SELECT
+ 
+            date(timestamp) AS day,
+ 
+            AVG(people_inside) AS average_occupancy
+ 
+        FROM events
+ 
+        WHERE strftime('%Y-%m', timestamp) = ?
+ 
+        GROUP BY day
+ 
+        ORDER BY day
+ 
+    `).all(month);
+ 
+    res.json(rows);
+});
+
 export default router;

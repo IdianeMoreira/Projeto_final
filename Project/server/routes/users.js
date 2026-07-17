@@ -5,9 +5,7 @@ import { db } from "../database.js";
 
 const router = express.Router();
 
-//
-// REGISTER
-//
+// rota para registrar um novo utilizador (signup)
 router.post("/register", async (req, res) => {
 
     const { username, password } = req.body;
@@ -35,9 +33,7 @@ router.post("/register", async (req, res) => {
 
 });
 
-//
-// LOGIN
-//
+// rota para autenticar um utilizador (login)
 router.post("/login", async (req, res) => {
 
     const { username, password } = req.body;

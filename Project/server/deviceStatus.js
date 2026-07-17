@@ -1,3 +1,4 @@
+// Estrutura para armazenar o estado do dispositivo
 let deviceStatus = {
     wifi: false,
     mqtt: false,
@@ -8,6 +9,7 @@ let deviceStatus = {
     lastLoRaUpdate: null
 };
 
+// Atualiza o estado do dispositivo com novos valores
 export function updateDeviceStatus(newStatus) {
 
     deviceStatus = {
@@ -17,12 +19,14 @@ export function updateDeviceStatus(newStatus) {
     };
 }
 
+// Atualiza o estado do LoRa com novos valores
 export function updateLoRaStatus() {
 
     deviceStatus.lora = true;
     deviceStatus.lastLoRaUpdate = Date.now();
 }
 
+// Retorna o estado atual do dispositivo, considerando a última atualização e os tempos limite para determinar se está offline
 export function getDeviceStatus() {
 
     const mqttOffline =

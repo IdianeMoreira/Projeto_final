@@ -1,7 +1,7 @@
 const API_URL = "http://localhost:3000/api";
 
 // ---------------- Current Occupancy ----------------
-
+// Obter a ocupação atual
 export async function getCurrentOccupancy() {
 
     try {
@@ -27,7 +27,7 @@ export async function getCurrentOccupancy() {
 }
 
 // ---------------- System Status ----------------
-
+// Obter o status do sistema
 export async function getSystemStatus() {
 
     try {
@@ -53,6 +53,7 @@ export async function getSystemStatus() {
 }
 
 // ---------------- Hourly Stats ----------------
+// Obter estatísticas horárias
 export async function getHourlyStats(
     date: string
 ) {
@@ -81,6 +82,7 @@ export async function getHourlyStats(
 }
 
 // ---------------- Occupancy Stats ----------------
+// Obter estatísticas de ocupação
 export async function getOccupancyStats(
     date: string
 ) {
@@ -109,6 +111,7 @@ export async function getOccupancyStats(
 }
 
 // ---------------- Available Dates ----------------
+// Obter datas disponíveis
 export async function getAvailableDates() {
 
     try {
@@ -135,6 +138,7 @@ export async function getAvailableDates() {
 }
 
 // ---------------- Weekly Stats ----------------
+// Obter estatísticas semanais
 export async function getWeekStats() {
 
     try {
@@ -161,6 +165,7 @@ export async function getWeekStats() {
 }
 
 // ---------------- Two Weeks Stats ----------------
+// Obter estatísticas de duas semanas
 export async function getTwoWeeksStats() {
 
     try {
@@ -186,6 +191,8 @@ export async function getTwoWeeksStats() {
     }
 }
 
+// ---------------- Monthly Stats ----------------
+// Obter estatísticas mensais
 export async function getMonthStats() {
 
     try {
@@ -209,7 +216,7 @@ export async function getMonthStats() {
 }
 
 // ---------------- Authentication ----------------
-
+// login
 export async function login(
   username: string,
   password: string
@@ -234,7 +241,7 @@ export async function login(
   return response.json();
 
 }
-
+// signup
 export async function register(
   username: string,
   password: string
@@ -261,7 +268,7 @@ export async function register(
 }
 
 // ---------------- Device Status ----------------
-
+// Obter o status do dispositivo
 export async function getDeviceStatus() {
 
     try {
@@ -285,3 +292,53 @@ export async function getDeviceStatus() {
         return null;
     }
 }
+
+// ---------------- Available Months ----------------
+// Obter meses disponíveis
+export async function getAvailableMonths(): Promise<string[]> {
+ 
+    try {
+ 
+        const response = await fetch(
+            `${API_URL}/months`
+        );
+ 
+        if (!response.ok) {
+            throw new Error("Failed to fetch months");
+        }
+ 
+        return await response.json();
+ 
+    } catch (err) {
+ 
+        console.error(err);
+ 
+        return [];
+    }
+}
+ 
+// ---------------- Monthly Stats ----------------
+// Obter estatísticas mensais
+export async function getMonthlyStats(month: string) {
+ 
+    try {
+ 
+        const response = await fetch(
+            `${API_URL}/stats/monthly?month=${month}`
+        );
+ 
+        if (!response.ok) {
+            throw new Error("Failed to fetch monthly stats");
+        }
+ 
+        return await response.json();
+ 
+    } catch (err) {
+ 
+        console.error(err);
+ 
+        return [];
+    }
+}
+
+
