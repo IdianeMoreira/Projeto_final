@@ -1,12 +1,14 @@
 import { register } from "@/services/api";
 import { useState } from "react";
 
+// Props para o componente RegisterPage
 type Props = {
   setPage: (
     page: string
   ) => void;
 };
 
+// Componente RegisterPage que exibe o formulário de registro de utilizador
 function RegisterPage({ setPage }: Props) {
 
     // estados

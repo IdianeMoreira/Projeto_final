@@ -2,6 +2,7 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+// Componente Card que exibe um cartão com cabeçalho, conteúdo e rodapé
 function Card({
   className,
   size = "default",

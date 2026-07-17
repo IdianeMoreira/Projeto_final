@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { login } from "@/services/api";
 
+// Props para o componente LoginPage
 type Props = {
 
   setPage: (
@@ -15,6 +16,7 @@ type Props = {
 
 };
 
+// Componente LoginPage que exibe o formulário de login
 function LoginPage({ setPage, setLoggedUser }: Props) {
 
     const [username, setUsername] =
@@ -36,25 +38,18 @@ function LoginPage({ setPage, setLoggedUser }: Props) {
 
         if (response.success) {
 
-            setLoggedUser(
-                username
-            );
+            setLoggedUser(username);
 
-            setMessage(
-                "Login successful"
-            );
+            localStorage.setItem("loggedUser", username);
 
-            setTimeout(() => {
+            setMessage("Login successful");
 
-            setPage("home");
-
-            }, 1000);
+            setTimeout(() => {setPage("home");}, 1000);
 
         } else {
 
-            setMessage(
-            "Invalid username or password"
-            );
+            setMessage("Invalid username or password"
+);
 
         }
 
